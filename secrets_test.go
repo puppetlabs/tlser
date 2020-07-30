@@ -86,6 +86,7 @@ func TestGetTLSFromSecret(t *testing.T) {
 	_, err = getTLSFromSecret(mock, "foo", "default")
 	req.Error(err)
 
+	secret.Data = make(map[string][]byte)
 	secret.Data["tls.crt"] = []byte(testCert)
 	_, err = getTLSFromSecret(mock, "foo", "default")
 	req.Error(err)
