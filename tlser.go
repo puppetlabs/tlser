@@ -37,7 +37,7 @@ func main() {
 	flag.Parse()
 
 	if len(*subject) == 0 {
-		log.Fatalf("Missing required --subject parameter")
+		log.Fatalf("Missing required -subject parameter")
 	}
 
 	var sg secretGetter
