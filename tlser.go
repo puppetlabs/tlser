@@ -107,12 +107,12 @@ func main() {
 	if sg != nil {
 		// Upload the new cert/key pair.
 		log.Printf("Uploading new cert to secret %v in namespace %v", *k8sName, *k8sNs)
-		var secret *corev1.Secret
+		var secret corev1.Secret
 		secret.Name = *k8sName
 		secret.Namespace = *k8sNs
 		secret.Data = map[string][]byte{"tls.crt": []byte(cert), "tls.key": []byte(key)}
 		secret.Type = "kubernetes.io/tls"
-		sg.setSecret(secret, previous.cert != nil)
+		sg.setSecret(&secret, previous.cert != nil)
 	} else {
 		fmt.Print(cert, key)
 	}
