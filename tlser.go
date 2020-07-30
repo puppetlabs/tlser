@@ -3,14 +3,21 @@
 package main
 
 import (
+	"context"
+	"crypto/rand"
 	"crypto/rsa"
-	"crypto/x509"
 	"encoding/pem"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"strings"
+
+	corev1 "k8s.io/api/core/v1"
+	k8errors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 var (
@@ -25,6 +32,92 @@ var (
 	k8sNs   = flag.String("namespace", "default", "Namespace of the Kubernetes secret to update")
 )
 
+func main() {
+	log.SetFlags(0)
+	flag.Parse()
+
+	if len(*subject) == 0 {
+		log.Fatalf("Missing required --subject parameter")
+	}
+
+	var sg secretGetter
+	var previous certificate
+	if len(*k8sName) == 0 {
+		log.Print("No secret name provided, generating cert on stdout")
+	} else {
+		// Get a Kubernetes client
+		cfg, err := config.GetConfig()
+		if err != nil {
+			log.Fatalf("Unable to get Kubernetes config: %v", err)
+		}
+
+		clientset, err := kubernetes.NewForConfig(cfg)
+		if err != nil {
+			log.Fatalf("Unable to initialize Kubernetes client: %v", err)
+		}
+		sg = k8sAdapter{clientset: clientset}
+
+		previous, err = getTLSFromSecret(sg, *k8sName, *k8sNs)
+		if err != nil && !k8errors.IsNotFound(err) {
+			log.Fatalf("Unable to retrieve secret %v in namespace %v: %v", *k8sName, *k8sNs, err)
+		}
+	}
+
+	var ipStrings, dnsStrings []string
+	if len(*ip) > 0 {
+		ipStrings = strings.Split(*ip, ",")
+	}
+	if len(*dns) > 0 {
+		dnsStrings = strings.Split(*dns, ",")
+	}
+
+	if previous.cert != nil {
+		// Check whether it needs to be updated.
+		if previous.isValid() && previous.inSync(*subject, ipStrings, dnsStrings) {
+			log.Print("Previous cert matches parameters, no update performed.")
+			return
+		}
+	}
+
+	signer, err := readCa(*cacrt, *cakey)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	rsaKey := previous.key
+	if rsaKey == nil {
+		rsaKey, err = rsa.GenerateKey(rand.Reader, 2048)
+		if err != nil {
+			log.Fatalf("Unable to generate private key: %v", err)
+		}
+	}
+
+	cert, key, err := generateSignedCert(
+		*subject,
+		ipStrings,
+		dnsStrings,
+		*expire,
+		rsaKey,
+		signer,
+	)
+	if err != nil {
+		log.Fatalf("Unable to generate certificate: %v", err)
+	}
+
+	if sg != nil {
+		// Upload the new cert/key pair.
+		log.Printf("Uploading new cert to secret %v in namespace %v", *k8sName, *k8sNs)
+		var secret *corev1.Secret
+		secret.Name = *k8sName
+		secret.Namespace = *k8sNs
+		secret.Data = map[string][]byte{"tls.crt": []byte(cert), "tls.key": []byte(key)}
+		secret.Type = "kubernetes.io/tls"
+		sg.setSecret(secret, previous.cert != nil)
+	} else {
+		fmt.Print(cert, key)
+	}
+}
+
 func readPem(file string) ([]byte, error) {
 	bytes, err := ioutil.ReadFile(file)
 	if err != nil {
@@ -38,66 +131,34 @@ func readPem(file string) ([]byte, error) {
 	return decoded.Bytes, nil
 }
 
-func readCa() (*x509.Certificate, *rsa.PrivateKey, error) {
-	bytes, err := readPem(*cacrt)
+func readCa(cacrt, cakey string) (certificate, error) {
+	certBytes, err := readPem(cacrt)
 	if err != nil {
-		return nil, nil, err
+		return certificate{}, err
 	}
 
-	cert, err := x509.ParseCertificate(bytes)
+	keyBytes, err := readPem(cakey)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Unable to parse CA certificate: %v", err)
+		return certificate{}, err
 	}
 
-	bytes, err = readPem(*cakey)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	key, err := x509.ParsePKCS1PrivateKey(bytes)
-	if err != nil {
-		return nil, nil, fmt.Errorf("Unable to parse CA private key: %v", err)
-	}
-
-	return cert, key, nil
+	return parseCertPair(certBytes, keyBytes)
 }
 
-func main() {
-	log.SetFlags(0)
-	flag.Parse()
+type k8sAdapter struct {
+	clientset *kubernetes.Clientset
+}
 
-	if len(*subject) == 0 {
-		log.Fatalf("Missing required --subject parameter")
-	}
+func (a k8sAdapter) getSecret(name, namespace string) (*corev1.Secret, error) {
+	return a.clientset.CoreV1().Secrets(namespace).Get(context.Background(), name, metav1.GetOptions{})
+}
 
-	if len(*k8sName) == 0 {
-		log.Print("No secret name provided, generating cert on stdout")
+func (a k8sAdapter) setSecret(secret *corev1.Secret, update bool) (err error) {
+	secretI := a.clientset.CoreV1().Secrets(secret.Namespace)
+	if update {
+		_, err = secretI.Update(context.Background(), secret, metav1.UpdateOptions{})
+	} else {
+		_, err = secretI.Create(context.Background(), secret, metav1.CreateOptions{})
 	}
-
-	signerCert, signerKey, err := readCa()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	var ipStrings, dnsStrings []string
-	if len(*ip) > 0 {
-		ipStrings = strings.Split(*ip, ",")
-	}
-	if len(*dns) > 0 {
-		dnsStrings = strings.Split(*dns, ",")
-	}
-
-	cert, key, err := generateSignedCert(
-		*subject,
-		ipStrings,
-		dnsStrings,
-		*expire,
-		signerCert,
-		signerKey,
-	)
-	if err != nil {
-		log.Fatalf("Unable to generate certificate: %v", err)
-	}
-
-	fmt.Print(cert, key)
+	return
 }

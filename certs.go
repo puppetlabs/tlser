@@ -11,6 +11,7 @@ import (
 	"log"
 	"math/big"
 	"net"
+	"sort"
 	"time"
 )
 
@@ -18,34 +19,27 @@ func generateSignedCert(
 	cn string,
 	ip, dns []string,
 	daysValid int,
-	signerCert *x509.Certificate,
-	signerKey *rsa.PrivateKey,
+	key *rsa.PrivateKey,
+	signer certificate,
 ) (string, string, error) {
-	template, err := getBaseCertTemplate(cn, ip, dns, daysValid)
-	if err != nil {
+	var err error
+	input := certificate{key: key}
+	if input.cert, err = getBaseCertTemplate(cn, ip, dns, daysValid); err != nil {
 		log.Fatalf("Unable to generate certificate template: %v", err)
 	}
-
-	priv, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		log.Fatalf("Unable to generate private key: %v", err)
-	}
-
-	return getCertAndKey(template, priv, signerCert, signerKey)
+	return getCertAndKey(input, signer)
 }
 
 func getCertAndKey(
-	template *x509.Certificate,
-	signeeKey *rsa.PrivateKey,
-	parent *x509.Certificate,
-	signingKey *rsa.PrivateKey,
+	input certificate,
+	signer certificate,
 ) (string, string, error) {
 	derBytes, err := x509.CreateCertificate(
 		rand.Reader,
-		template,
-		parent,
-		&signeeKey.PublicKey,
-		signingKey,
+		input.cert,
+		signer.cert,
+		&input.key.PublicKey,
+		signer.key,
 	)
 	if err != nil {
 		return "", "", fmt.Errorf("error creating certificate: %s", err)
@@ -64,7 +58,7 @@ func getCertAndKey(
 		&keyBuffer,
 		&pem.Block{
 			Type:  "RSA PRIVATE KEY",
-			Bytes: x509.MarshalPKCS1PrivateKey(signeeKey),
+			Bytes: x509.MarshalPKCS1PrivateKey(input.key),
 		},
 	); err != nil {
 		return "", "", fmt.Errorf("error pem-encoding key: %s", err)
@@ -120,4 +114,52 @@ func getNetIPs(ips []string) ([]net.IP, error) {
 		netIPs[i] = netIP
 	}
 	return netIPs, nil
+}
+
+type certificate struct {
+	cert *x509.Certificate
+	key  *rsa.PrivateKey
+}
+
+func (c certificate) isValid() bool {
+	return time.Now().Before(c.cert.NotAfter)
+}
+
+func equal(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	sort.Strings(a)
+	sort.Strings(b)
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// Returns false if common name or alternate names don't match.
+func (c certificate) inSync(cn string, ip, dns []string) bool {
+	if c.cert.Subject.CommonName != cn {
+		log.Printf("Subject out-of-sync: %v, %v", c.cert.Subject.CommonName, cn)
+		return false
+	}
+
+	if !equal(c.cert.DNSNames, dns) {
+		log.Printf("DNS names out-of-sync: %v, %v", c.cert.DNSNames, dns)
+		return false
+	}
+
+	ipaddrs := make([]string, len(c.cert.IPAddresses))
+	for i, addr := range c.cert.IPAddresses {
+		ipaddrs[i] = addr.String()
+	}
+	if !equal(ipaddrs, ip) {
+		log.Printf("IP addresses out-of-sync: %v, %v", ipaddrs, ip)
+		return false
+	}
+
+	return true
 }

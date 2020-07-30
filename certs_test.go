@@ -5,37 +5,45 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func generateCertificateAuthority() (*x509.Certificate, *rsa.PrivateKey, error) {
+func generateCertificateAuthority() (certificate, error) {
 	template, err := getBaseCertTemplate("signer", nil, nil, 1)
 	if err != nil {
-		return nil, nil, err
+		return certificate{}, err
 	}
 	template.KeyUsage = template.KeyUsage | x509.KeyUsageCertSign
 	template.IsCA = true
 
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
-		return nil, nil, err
+		return certificate{}, err
 	}
 
 	bytes, err := x509.CreateCertificate(rand.Reader, template, template, &priv.PublicKey, priv)
 	if err != nil {
-		return nil, nil, err
+		return certificate{}, err
 	}
 
 	cert, err := x509.ParseCertificate(bytes)
-	return cert, priv, err
+	return certificate{cert: cert, key: priv}, err
 }
 
-const (
-	beginCertificate = "-----BEGIN CERTIFICATE-----"
-	endCertificate   = "-----END CERTIFICATE-----"
-)
+func generateX509(cn string, ip, dns []string, daysValid int, key *rsa.PrivateKey, signer certificate) (*x509.Certificate, error) {
+	out, _, err := generateSignedCert(cn, ip, dns, daysValid, key, signer)
+	if err != nil {
+		return nil, err
+	}
+	decodedCert, _ := pem.Decode([]byte(out))
+	if decodedCert == nil {
+		return nil, errors.New("failed")
+	}
+	return x509.ParseCertificate(decodedCert.Bytes)
+}
 
 func TestGetCertTemplate(t *testing.T) {
 	const (
@@ -47,26 +55,75 @@ func TestGetCertTemplate(t *testing.T) {
 	)
 	req := assert.New(t)
 
-	signerCert, signerKey, err := generateCertificateAuthority()
+	signer, err := generateCertificateAuthority()
+	req.NoError(err)
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	req.NoError(err)
 
-	out, _, err := generateSignedCert(cn, []string{ip1, ip2}, []string{dns1, dns2}, 365, signerCert, signerKey)
+	cert, err := generateX509(cn, []string{ip1, ip2}, []string{dns1, dns2}, 365, key, signer)
 	req.NoError(err)
 
-	assert.Contains(t, out, beginCertificate)
-	assert.Contains(t, out, endCertificate)
+	req.Equal(cn, cert.Subject.CommonName)
+	req.Equal(1, cert.SerialNumber.Sign())
+	req.Equal(2, len(cert.IPAddresses))
+	req.Equal(ip1, cert.IPAddresses[0].String())
+	req.Equal(ip2, cert.IPAddresses[1].String())
+	req.Contains(cert.DNSNames, dns1)
+	req.Contains(cert.DNSNames, dns2)
+	req.False(cert.IsCA)
+}
 
-	decodedCert, _ := pem.Decode([]byte(out))
-	assert.Nil(t, err)
-	cert, err := x509.ParseCertificate(decodedCert.Bytes)
-	assert.Nil(t, err)
+func TestIsValid(t *testing.T) {
+	req := assert.New(t)
+	var cert certificate
 
-	assert.Equal(t, cn, cert.Subject.CommonName)
-	assert.Equal(t, 1, cert.SerialNumber.Sign())
-	assert.Equal(t, 2, len(cert.IPAddresses))
-	assert.Equal(t, ip1, cert.IPAddresses[0].String())
-	assert.Equal(t, ip2, cert.IPAddresses[1].String())
-	assert.Contains(t, cert.DNSNames, dns1)
-	assert.Contains(t, cert.DNSNames, dns2)
-	assert.False(t, cert.IsCA)
+	signer, err := generateCertificateAuthority()
+	req.NoError(err)
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	req.NoError(err)
+
+	cert.cert, err = generateX509("foo", []string{}, []string{}, 1, key, signer)
+	req.NoError(err)
+	req.True(cert.isValid())
+
+	cert.cert, err = generateX509("foo", []string{}, []string{}, 0, key, signer)
+	req.NoError(err)
+	req.False(cert.isValid())
+}
+
+func TestInSync(t *testing.T) {
+	const (
+		cn   = "foo.com"
+		ip1  = "10.0.0.1"
+		ip2  = "10.0.0.2"
+		dns1 = "bar.com"
+		dns2 = "bat.com"
+	)
+	req := assert.New(t)
+	var cert certificate
+
+	signer, err := generateCertificateAuthority()
+	req.NoError(err)
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	req.NoError(err)
+
+	cert.cert, err = generateX509(cn, []string{}, []string{}, 1, key, signer)
+	req.NoError(err)
+
+	req.True(cert.inSync(cn, []string{}, []string{}))
+	req.True(cert.inSync(cn, nil, []string{}))
+	req.True(cert.inSync(cn, []string{}, nil))
+	req.True(cert.inSync(cn, nil, nil))
+	req.False(cert.inSync("bar", []string{}, []string{}))
+	req.False(cert.inSync(cn, []string{ip1}, []string{}))
+	req.False(cert.inSync(cn, []string{}, []string{dns1}))
+
+	cert.cert, err = generateX509(cn, []string{ip1, ip2}, []string{dns2, dns1}, 1, key, signer)
+	req.NoError(err)
+
+	req.True(cert.inSync(cn, []string{ip1, ip2}, []string{dns1, dns2}))
+	req.True(cert.inSync(cn, []string{ip2, ip1}, []string{dns2, dns1}))
+	req.False(cert.inSync("bar", []string{ip1, ip2}, []string{dns1, dns2}))
+	req.False(cert.inSync(cn, []string{ip1}, []string{dns1, dns2}))
+	req.False(cert.inSync(cn, []string{ip1, ip2}, []string{dns2}))
 }
