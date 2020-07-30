@@ -84,11 +84,16 @@ func TestIsValid(t *testing.T) {
 
 	cert.cert, err = generateX509("foo", []string{}, []string{}, 1, key, signer)
 	req.NoError(err)
-	req.True(cert.isValid())
+	req.True(cert.isValid(signer))
+
+	signer2, err := generateCertificateAuthority()
+	req.NoError(err)
+	req.False(cert.isValid(signer2))
 
 	cert.cert, err = generateX509("foo", []string{}, []string{}, 0, key, signer)
 	req.NoError(err)
-	req.False(cert.isValid())
+	req.False(cert.isValid(signer))
+
 }
 
 func TestInSync(t *testing.T) {

@@ -121,8 +121,15 @@ type certificate struct {
 	key  *rsa.PrivateKey
 }
 
-func (c certificate) isValid() bool {
-	return time.Now().Before(c.cert.NotAfter)
+func (c certificate) isValid(signer certificate) bool {
+	pool := x509.NewCertPool()
+	pool.AddCert(signer.cert)
+	_, err := c.cert.Verify(x509.VerifyOptions{Roots: pool})
+	if err != nil {
+		log.Printf("Invalid cert: %v", err)
+		return false
+	}
+	return true
 }
 
 func equal(a, b []string) bool {

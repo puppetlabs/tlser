@@ -71,17 +71,17 @@ func main() {
 		dnsStrings = strings.Split(*dns, ",")
 	}
 
-	if previous.cert != nil {
-		// Check whether it needs to be updated.
-		if previous.isValid() && previous.inSync(*subject, ipStrings, dnsStrings) {
-			log.Print("Previous cert matches parameters, no update performed.")
-			return
-		}
-	}
-
 	signer, err := readCa(*cacrt, *cakey)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if previous.cert != nil {
+		// Check whether it needs to be updated.
+		if previous.isValid(signer) && previous.inSync(*subject, ipStrings, dnsStrings) {
+			log.Print("Previous cert matches parameters, no update performed.")
+			return
+		}
 	}
 
 	rsaKey := previous.key
