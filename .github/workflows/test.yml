@@ -1,0 +1,45 @@
+name: Lint and Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint with golangci-lint
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v2
+    - name: Lint
+      uses: actions-contrib/golangci-lint@v1
+      with:
+        args: run -v --deadline 3m
+        golangci_lint_version: 1.29.0
+  test:
+    name: Test Go Stable
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.14
+      id: go
+    - name: Check out code
+      uses: actions/checkout@v2
+    - name: Get dependencies
+      run: go get -v -t -d ./...
+    - name: Test
+      run: go test -race ./...
+  build:
+    name: Test Dockerfile
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v2
+    - name: Build container
+      run: docker build . -t tlser
+    - name: Verify container
+      run: docker run tlser -h || [ $? == 2 ]
