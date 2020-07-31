@@ -114,6 +114,14 @@ func TestInSync(t *testing.T) {
 
 	cert.cert, err = generateX509(cn, []string{}, []string{}, 1, key, signer)
 	req.NoError(err)
+	req.False(cert.inSync(cn, []string{}, []string{}))
+
+	cert.cert, err = generateX509(cn, []string{}, []string{}, 3, key, signer)
+	req.NoError(err)
+	req.False(cert.inSync(cn, []string{}, []string{}))
+
+	cert.cert, err = generateX509(cn, []string{}, []string{}, 5, key, signer)
+	req.NoError(err)
 
 	req.True(cert.inSync(cn, []string{}, []string{}))
 	req.True(cert.inSync(cn, nil, []string{}))
@@ -123,7 +131,7 @@ func TestInSync(t *testing.T) {
 	req.False(cert.inSync(cn, []string{ip1}, []string{}))
 	req.False(cert.inSync(cn, []string{}, []string{dns1}))
 
-	cert.cert, err = generateX509(cn, []string{ip1, ip2}, []string{dns2, dns1}, 1, key, signer)
+	cert.cert, err = generateX509(cn, []string{ip1, ip2}, []string{dns2, dns1}, 5, key, signer)
 	req.NoError(err)
 
 	req.True(cert.inSync(cn, []string{ip1, ip2}, []string{dns1, dns2}))

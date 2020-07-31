@@ -147,7 +147,7 @@ func equal(a, b []string) bool {
 	return true
 }
 
-// Returns false if common name or alternate names don't match.
+// Returns false if common name or alternate names don't match, or if it will expire soon.
 func (c certificate) inSync(cn string, ip, dns []string) bool {
 	if c.cert.Subject.CommonName != cn {
 		log.Printf("Subject out-of-sync: %v, %v", c.cert.Subject.CommonName, cn)
@@ -165,6 +165,13 @@ func (c certificate) inSync(cn string, ip, dns []string) bool {
 	}
 	if !equal(ipaddrs, ip) {
 		log.Printf("IP addresses out-of-sync: %v, %v", ipaddrs, ip)
+		return false
+	}
+
+	// Check if the certificate expires in the next 3 days.
+	future := time.Now().Add(72 * time.Hour)
+	if future.After(c.cert.NotAfter) {
+		log.Printf("Expires in the next 72 hours: %v", c.cert.NotAfter)
 		return false
 	}
 
