@@ -112,7 +112,9 @@ func main() {
 		secret.Namespace = *k8sNs
 		secret.Data = map[string][]byte{"tls.crt": []byte(cert), "tls.key": []byte(key)}
 		secret.Type = "kubernetes.io/tls"
-		sg.setSecret(&secret, previous.cert != nil)
+		if err := sg.setSecret(&secret, previous.cert != nil); err != nil {
+			log.Fatalf("Unable to update secret %v in namespace %v: %v", *k8sName, *k8sNs, err)
+		}
 	} else {
 		fmt.Print(cert, key)
 	}
