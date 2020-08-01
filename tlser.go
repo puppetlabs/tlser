@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"log"
 	"strings"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -26,8 +27,9 @@ var (
 	dns     = flag.String("dns", "", "Comma-separated list of DNS alternative names")
 	ip      = flag.String("ip", "", "Comma-separated list of valid IP addresses")
 
-	k8sName = flag.String("name", "", "Name of the Kubernetes secret to update")
-	k8sNs   = flag.String("namespace", "default", "Namespace of the Kubernetes secret to update")
+	k8sName  = flag.String("name", "", "Name of the Kubernetes secret to update")
+	k8sNs    = flag.String("namespace", "default", "Namespace of the Kubernetes secret to update")
+	interval = flag.String("interval", "", "Interval to check if cert is insync (ex: 1h, 30m)")
 )
 
 func main() {
@@ -36,6 +38,15 @@ func main() {
 
 	if len(*subject) == 0 {
 		log.Fatalf("Missing required -subject parameter")
+	}
+
+	var err error
+	var syncInterval time.Duration
+	if len(*interval) != 0 {
+		syncInterval, err = time.ParseDuration(*interval)
+		if err != nil {
+			log.Fatalf("Parameter -interval was not a valid duration: %v", err)
+		}
 	}
 
 	var ipStrings, dnsStrings []string
@@ -96,8 +107,19 @@ func main() {
 		signer:    signer,
 	}
 
-	if err := sync.sync(); err != nil {
-		log.Fatalf("Unable to sync certs: %v", err)
+	if syncInterval == time.Duration(0) {
+		if err := sync.sync(); err != nil {
+			log.Fatalf("Unable to sync certs: %v", err)
+		}
+		return
+	}
+
+	log.Printf("Monitoring every %v", syncInterval)
+	for {
+		if err := sync.sync(); err != nil {
+			log.Fatalf("Unable to sync certs: %v", err)
+		}
+		time.Sleep(syncInterval)
 	}
 }
 
