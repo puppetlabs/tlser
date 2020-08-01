@@ -30,22 +30,22 @@ func getTLSFromSecret(c secrets, id identifier) (certificate, error) {
 	}
 
 	if secret.Type != tlsSecretType {
-		return certificate{}, fmt.Errorf("Secret %v must have type %v, not %v", id, tlsSecretType, secret.Type)
+		return certificate{}, fmt.Errorf("secret %v must have type %v, not %v", id, tlsSecretType, secret.Type)
 	}
 
 	certBytes, keyBytes := secret.Data["tls.crt"], secret.Data["tls.key"]
 	if certBytes == nil || keyBytes == nil {
-		return certificate{}, fmt.Errorf("Secret %v must include tls.crt and tls.key", id)
+		return certificate{}, fmt.Errorf("secret %v must include tls.crt and tls.key", id)
 	}
 
 	certDecoded, _ := pem.Decode(certBytes)
 	if certDecoded == nil {
-		return certificate{}, fmt.Errorf("Unable to decode: %v", certBytes)
+		return certificate{}, fmt.Errorf("unable to decode: %v", certBytes)
 	}
 
 	keyDecoded, _ := pem.Decode(keyBytes)
 	if keyDecoded == nil {
-		return certificate{}, fmt.Errorf("Unable to decode: %v", keyBytes)
+		return certificate{}, fmt.Errorf("unable to decode: %v", keyBytes)
 	}
 
 	return parseCertPair(certDecoded.Bytes, keyDecoded.Bytes)
@@ -54,12 +54,12 @@ func getTLSFromSecret(c secrets, id identifier) (certificate, error) {
 func parseCertPair(certBytes, keyBytes []byte) (certificate, error) {
 	cert, err := x509.ParseCertificate(certBytes)
 	if err != nil {
-		return certificate{}, fmt.Errorf("Unable to parse certificate: %v", err)
+		return certificate{}, fmt.Errorf("unable to parse certificate: %w", err)
 	}
 
 	key, err := x509.ParsePKCS1PrivateKey(keyBytes)
 	if err != nil {
-		return certificate{}, fmt.Errorf("Unable to parse private key: %v", err)
+		return certificate{}, fmt.Errorf("unable to parse private key: %w", err)
 	}
 
 	return certificate{cert: cert, key: key}, nil

@@ -42,7 +42,7 @@ func getCertAndKey(
 		signer.key,
 	)
 	if err != nil {
-		return "", "", fmt.Errorf("error creating certificate: %s", err)
+		return "", "", fmt.Errorf("error creating certificate: %w", err)
 	}
 
 	certBuffer := bytes.Buffer{}
@@ -50,7 +50,7 @@ func getCertAndKey(
 		&certBuffer,
 		&pem.Block{Type: "CERTIFICATE", Bytes: derBytes},
 	); err != nil {
-		return "", "", fmt.Errorf("error pem-encoding certificate: %s", err)
+		return "", "", fmt.Errorf("error pem-encoding certificate: %w", err)
 	}
 
 	keyBuffer := bytes.Buffer{}
@@ -61,7 +61,7 @@ func getCertAndKey(
 			Bytes: x509.MarshalPKCS1PrivateKey(input.key),
 		},
 	); err != nil {
-		return "", "", fmt.Errorf("error pem-encoding key: %s", err)
+		return "", "", fmt.Errorf("error pem-encoding key: %w", err)
 	}
 
 	return certBuffer.String(), keyBuffer.String(), nil

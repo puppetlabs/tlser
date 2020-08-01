@@ -125,12 +125,12 @@ func main() {
 func readPem(file string) ([]byte, error) {
 	bytes, err := ioutil.ReadFile(file)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to read %v: %v", cacrt, err)
+		return nil, fmt.Errorf("unable to read %v: %w", cacrt, err)
 	}
 
 	decoded, _ := pem.Decode(bytes)
 	if decoded == nil {
-		return nil, fmt.Errorf("Unable to decode: %v", bytes)
+		return nil, fmt.Errorf("unable to decode: %v", bytes)
 	}
 	return decoded.Bytes, nil
 }
