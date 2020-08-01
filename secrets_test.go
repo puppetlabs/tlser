@@ -13,7 +13,7 @@ type secretMock struct {
 	err    error
 }
 
-func (m secretMock) getSecret(name, namespace string) (*corev1.Secret, error) {
+func (m secretMock) getSecret(identifier) (*corev1.Secret, error) {
 	return m.secret, m.err
 }
 
@@ -72,27 +72,28 @@ Sucz81ym6QREo7DZ4lDXuz5PhPW4KLeoWRw8syyraVQ/o6RsbHQ1
 
 func TestGetTLSFromSecret(t *testing.T) {
 	req := assert.New(t)
+	id := identifier{name: "foo", namespace: "default"}
 
-	_, err := getTLSFromSecret(secretMock{err: errors.New("failed")}, "foo", "default")
+	_, err := getTLSFromSecret(secretMock{err: errors.New("failed")}, id)
 	req.Error(err)
 
 	var secret corev1.Secret
 	mock := secretMock{secret: &secret}
 
-	_, err = getTLSFromSecret(mock, "foo", "default")
+	_, err = getTLSFromSecret(mock, id)
 	req.Error(err)
 
 	secret.Type = "kubernetes.io/tls"
-	_, err = getTLSFromSecret(mock, "foo", "default")
+	_, err = getTLSFromSecret(mock, id)
 	req.Error(err)
 
 	secret.Data = make(map[string][]byte)
 	secret.Data["tls.crt"] = []byte(testCert)
-	_, err = getTLSFromSecret(mock, "foo", "default")
+	_, err = getTLSFromSecret(mock, id)
 	req.Error(err)
 
 	secret.Data["tls.key"] = []byte(testKey)
-	cert, err := getTLSFromSecret(mock, "foo", "default")
+	cert, err := getTLSFromSecret(mock, id)
 	req.NoError(err)
 	req.NotNil(cert.cert)
 	req.NotNil(cert.key)

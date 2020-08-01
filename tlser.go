@@ -40,9 +40,11 @@ func main() {
 		log.Fatalf("Missing required -subject parameter")
 	}
 
+	id := identifier{name: *k8sName, namespace: *k8sNs}
+
 	var sg secrets
 	var previous certificate
-	if len(*k8sName) == 0 {
+	if len(id.name) == 0 {
 		log.Print("No secret name provided, generating cert on stdout")
 	} else {
 		// Get a Kubernetes client
@@ -57,9 +59,9 @@ func main() {
 		}
 		sg = k8sAdapter{clientset: clientset}
 
-		previous, err = getTLSFromSecret(sg, *k8sName, *k8sNs)
+		previous, err = getTLSFromSecret(sg, id)
 		if err != nil && !k8errors.IsNotFound(err) {
-			log.Fatalf("Unable to retrieve secret %v in namespace %v: %v", *k8sName, *k8sNs, err)
+			log.Fatalf("Unable to retrieve secret %v: %v", id, err)
 		}
 	}
 
@@ -106,14 +108,14 @@ func main() {
 
 	if sg != nil {
 		// Upload the new cert/key pair.
-		log.Printf("Uploading new cert to secret %v in namespace %v", *k8sName, *k8sNs)
+		log.Printf("Uploading new cert to secret %v", id)
 		var secret corev1.Secret
 		secret.Name = *k8sName
 		secret.Namespace = *k8sNs
 		secret.Data = map[string][]byte{"tls.crt": []byte(cert), "tls.key": []byte(key)}
 		secret.Type = "kubernetes.io/tls"
 		if err := sg.setSecret(&secret, previous.cert != nil); err != nil {
-			log.Fatalf("Unable to update secret %v in namespace %v: %v", *k8sName, *k8sNs, err)
+			log.Fatalf("Unable to update secret %v: %v", id, err)
 		}
 	} else {
 		fmt.Print(cert, key)
@@ -151,8 +153,8 @@ type k8sAdapter struct {
 	clientset *kubernetes.Clientset
 }
 
-func (a k8sAdapter) getSecret(name, namespace string) (*corev1.Secret, error) {
-	return a.clientset.CoreV1().Secrets(namespace).Get(context.Background(), name, metav1.GetOptions{})
+func (a k8sAdapter) getSecret(id identifier) (*corev1.Secret, error) {
+	return a.clientset.CoreV1().Secrets(id.namespace).Get(context.Background(), id.name, metav1.GetOptions{})
 }
 
 func (a k8sAdapter) setSecret(secret *corev1.Secret, update bool) (err error) {

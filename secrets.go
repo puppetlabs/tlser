@@ -3,30 +3,37 @@ package main
 import (
 	"crypto/x509"
 	"encoding/pem"
-	"errors"
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
 )
 
+type identifier struct {
+	name, namespace string
+}
+
+func (id identifier) String() string {
+	return fmt.Sprintf("%v in namespace %v", id.name, id.namespace)
+}
+
 type secrets interface {
-	getSecret(name, namespace string) (*corev1.Secret, error)
+	getSecret(id identifier) (*corev1.Secret, error)
 	setSecret(secret *corev1.Secret, update bool) error
 }
 
-func getTLSFromSecret(c secrets, name, namespace string) (certificate, error) {
-	secret, err := c.getSecret(name, namespace)
+func getTLSFromSecret(c secrets, id identifier) (certificate, error) {
+	secret, err := c.getSecret(id)
 	if err != nil {
 		return certificate{}, err
 	}
 
 	if secret.Type != "kubernetes.io/tls" {
-		return certificate{}, fmt.Errorf("Secret %v in namespace %v must have type kubernetes.io/tls, not %v", name, namespace, secret.Type)
+		return certificate{}, fmt.Errorf("Secret %v must have type kubernetes.io/tls, not %v", id, secret.Type)
 	}
 
 	certBytes, keyBytes := secret.Data["tls.crt"], secret.Data["tls.key"]
 	if certBytes == nil || keyBytes == nil {
-		return certificate{}, errors.New("Secret %v in namespace %v must include tls.crt and tls.key")
+		return certificate{}, fmt.Errorf("Secret %v must include tls.crt and tls.key", id)
 	}
 
 	certDecoded, _ := pem.Decode(certBytes)
