@@ -13,7 +13,6 @@ import (
 	"log"
 	"strings"
 
-	corev1 "k8s.io/api/core/v1"
 	k8errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -109,7 +108,7 @@ func main() {
 	if sg != nil {
 		// Upload the new cert/key pair.
 		log.Printf("Uploading new cert to secret %v", id)
-		var secret corev1.Secret
+		var secret secret
 		secret.Name = *k8sName
 		secret.Namespace = *k8sNs
 		secret.Data = map[string][]byte{"tls.crt": []byte(cert), "tls.key": []byte(key)}
@@ -153,11 +152,11 @@ type k8sAdapter struct {
 	clientset *kubernetes.Clientset
 }
 
-func (a k8sAdapter) getSecret(id identifier) (*corev1.Secret, error) {
+func (a k8sAdapter) getSecret(id identifier) (*secret, error) {
 	return a.clientset.CoreV1().Secrets(id.namespace).Get(context.Background(), id.name, metav1.GetOptions{})
 }
 
-func (a k8sAdapter) setSecret(secret *corev1.Secret, update bool) (err error) {
+func (a k8sAdapter) setSecret(secret *secret, update bool) (err error) {
 	secretI := a.clientset.CoreV1().Secrets(secret.Namespace)
 	if update {
 		_, err = secretI.Update(context.Background(), secret, metav1.UpdateOptions{})

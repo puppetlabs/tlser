@@ -5,19 +5,18 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	corev1 "k8s.io/api/core/v1"
 )
 
 type secretMock struct {
-	secret *corev1.Secret
+	secret *secret
 	err    error
 }
 
-func (m secretMock) getSecret(identifier) (*corev1.Secret, error) {
+func (m secretMock) getSecret(identifier) (*secret, error) {
 	return m.secret, m.err
 }
 
-func (m secretMock) setSecret(secret *corev1.Secret, update bool) error {
+func (m secretMock) setSecret(secret *secret, update bool) error {
 	m.secret = secret
 	return m.err
 }
@@ -77,7 +76,7 @@ func TestGetTLSFromSecret(t *testing.T) {
 	_, err := getTLSFromSecret(secretMock{err: errors.New("failed")}, id)
 	req.Error(err)
 
-	var secret corev1.Secret
+	var secret secret
 	mock := secretMock{secret: &secret}
 
 	_, err = getTLSFromSecret(mock, id)

@@ -10,6 +10,8 @@ import (
 
 const tlsSecretType = "kubernetes.io/tls"
 
+type secret = corev1.Secret
+
 type identifier struct {
 	name, namespace string
 }
@@ -19,8 +21,8 @@ func (id identifier) String() string {
 }
 
 type secrets interface {
-	getSecret(id identifier) (*corev1.Secret, error)
-	setSecret(secret *corev1.Secret, update bool) error
+	getSecret(id identifier) (*secret, error)
+	setSecret(secret *secret, update bool) error
 }
 
 func getTLSFromSecret(c secrets, id identifier) (certificate, error) {
