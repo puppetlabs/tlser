@@ -9,12 +9,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-type secretGetter interface {
+type secrets interface {
 	getSecret(name, namespace string) (*corev1.Secret, error)
 	setSecret(secret *corev1.Secret, update bool) error
 }
 
-func getTLSFromSecret(c secretGetter, name, namespace string) (certificate, error) {
+func getTLSFromSecret(c secrets, name, namespace string) (certificate, error) {
 	secret, err := c.getSecret(name, namespace)
 	if err != nil {
 		return certificate{}, err

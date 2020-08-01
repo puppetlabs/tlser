@@ -40,7 +40,7 @@ func main() {
 		log.Fatalf("Missing required -subject parameter")
 	}
 
-	var sg secretGetter
+	var sg secrets
 	var previous certificate
 	if len(*k8sName) == 0 {
 		log.Print("No secret name provided, generating cert on stdout")
