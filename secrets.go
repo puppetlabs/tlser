@@ -8,6 +8,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+const tlsSecretType = "kubernetes.io/tls"
+
 type identifier struct {
 	name, namespace string
 }
@@ -27,8 +29,8 @@ func getTLSFromSecret(c secrets, id identifier) (certificate, error) {
 		return certificate{}, err
 	}
 
-	if secret.Type != "kubernetes.io/tls" {
-		return certificate{}, fmt.Errorf("Secret %v must have type kubernetes.io/tls, not %v", id, secret.Type)
+	if secret.Type != tlsSecretType {
+		return certificate{}, fmt.Errorf("Secret %v must have type %v, not %v", id, tlsSecretType, secret.Type)
 	}
 
 	certBytes, keyBytes := secret.Data["tls.crt"], secret.Data["tls.key"]

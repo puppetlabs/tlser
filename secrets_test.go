@@ -83,7 +83,7 @@ func TestGetTLSFromSecret(t *testing.T) {
 	_, err = getTLSFromSecret(mock, id)
 	req.Error(err)
 
-	secret.Type = "kubernetes.io/tls"
+	secret.Type = tlsSecretType
 	_, err = getTLSFromSecret(mock, id)
 	req.Error(err)
 
