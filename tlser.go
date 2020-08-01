@@ -12,9 +12,8 @@ import (
 	"io/ioutil"
 	"log"
 	"strings"
+	"time"
 
-	corev1 "k8s.io/api/core/v1"
-	k8errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -28,8 +27,9 @@ var (
 	dns     = flag.String("dns", "", "Comma-separated list of DNS alternative names")
 	ip      = flag.String("ip", "", "Comma-separated list of valid IP addresses")
 
-	k8sName = flag.String("name", "", "Name of the Kubernetes secret to update")
-	k8sNs   = flag.String("namespace", "default", "Namespace of the Kubernetes secret to update")
+	k8sName  = flag.String("name", "", "Name of the Kubernetes secret to update")
+	k8sNs    = flag.String("namespace", "default", "Namespace of the Kubernetes secret to update")
+	interval = flag.String("interval", "", "Interval to check if cert is insync (ex: 1h, 30m)")
 )
 
 func main() {
@@ -40,26 +40,12 @@ func main() {
 		log.Fatalf("Missing required -subject parameter")
 	}
 
-	var sg secretGetter
-	var previous certificate
-	if len(*k8sName) == 0 {
-		log.Print("No secret name provided, generating cert on stdout")
-	} else {
-		// Get a Kubernetes client
-		cfg, err := config.GetConfig()
+	var err error
+	var syncInterval time.Duration
+	if len(*interval) != 0 {
+		syncInterval, err = time.ParseDuration(*interval)
 		if err != nil {
-			log.Fatalf("Unable to get Kubernetes config: %v", err)
-		}
-
-		clientset, err := kubernetes.NewForConfig(cfg)
-		if err != nil {
-			log.Fatalf("Unable to initialize Kubernetes client: %v", err)
-		}
-		sg = k8sAdapter{clientset: clientset}
-
-		previous, err = getTLSFromSecret(sg, *k8sName, *k8sNs)
-		if err != nil && !k8errors.IsNotFound(err) {
-			log.Fatalf("Unable to retrieve secret %v in namespace %v: %v", *k8sName, *k8sNs, err)
+			log.Fatalf("Parameter -interval was not a valid duration: %v", err)
 		}
 	}
 
@@ -73,62 +59,79 @@ func main() {
 
 	signer, err := readCa(*cacrt, *cakey)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Failed to read CA files: %v", err)
 	}
 
-	if previous.cert != nil {
-		// Check whether it needs to be updated.
-		if previous.isValid(signer) && previous.inSync(*subject, ipStrings, dnsStrings) {
-			log.Print("Previous cert matches parameters, no update performed.")
-			return
-		}
-	}
+	if len(*k8sName) == 0 {
+		log.Print("No secret name provided, generating cert on stdout")
 
-	rsaKey := previous.key
-	if rsaKey == nil {
-		rsaKey, err = rsa.GenerateKey(rand.Reader, 2048)
+		rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
 		if err != nil {
 			log.Fatalf("Unable to generate private key: %v", err)
 		}
-	}
 
-	cert, key, err := generateSignedCert(
-		*subject,
-		ipStrings,
-		dnsStrings,
-		*expire,
-		rsaKey,
-		signer,
-	)
-	if err != nil {
-		log.Fatalf("Unable to generate certificate: %v", err)
-	}
-
-	if sg != nil {
-		// Upload the new cert/key pair.
-		log.Printf("Uploading new cert to secret %v in namespace %v", *k8sName, *k8sNs)
-		var secret corev1.Secret
-		secret.Name = *k8sName
-		secret.Namespace = *k8sNs
-		secret.Data = map[string][]byte{"tls.crt": []byte(cert), "tls.key": []byte(key)}
-		secret.Type = "kubernetes.io/tls"
-		if err := sg.setSecret(&secret, previous.cert != nil); err != nil {
-			log.Fatalf("Unable to update secret %v in namespace %v: %v", *k8sName, *k8sNs, err)
+		cert, key, err := generateSignedCert(
+			*subject,
+			ipStrings,
+			dnsStrings,
+			*expire,
+			rsaKey,
+			signer,
+		)
+		if err != nil {
+			log.Fatalf("Unable to generate certificate: %v", err)
 		}
-	} else {
+
 		fmt.Print(cert, key)
+		return
+	}
+
+	// Get a Kubernetes client
+	cfg, err := config.GetConfig()
+	if err != nil {
+		log.Fatalf("Unable to get Kubernetes config: %v", err)
+	}
+
+	clientset, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		log.Fatalf("Unable to initialize Kubernetes client: %v", err)
+	}
+
+	sync := syncer{
+		secrets:   k8sAdapter{clientset: clientset},
+		id:        identifier{name: *k8sName, namespace: *k8sNs},
+		subject:   *subject,
+		ip:        ipStrings,
+		dns:       dnsStrings,
+		daysValid: *expire,
+		signer:    signer,
+	}
+
+	if syncInterval == time.Duration(0) {
+		if err := sync.sync(); err != nil {
+			log.Fatalf("Unable to sync certs: %v", err)
+		}
+		return
+	}
+
+	log.Printf("Monitoring every %v", syncInterval)
+	for {
+		if err := sync.sync(); err != nil {
+			log.Fatalf("Unable to sync certs: %v", err)
+		}
+		time.Sleep(syncInterval)
 	}
 }
 
 func readPem(file string) ([]byte, error) {
 	bytes, err := ioutil.ReadFile(file)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to read %v: %v", cacrt, err)
+		return nil, fmt.Errorf("unable to read %v: %w", cacrt, err)
 	}
 
 	decoded, _ := pem.Decode(bytes)
 	if decoded == nil {
-		return nil, fmt.Errorf("Unable to decode: %v", bytes)
+		return nil, fmt.Errorf("unable to decode: %v", bytes)
 	}
 	return decoded.Bytes, nil
 }
@@ -151,11 +154,11 @@ type k8sAdapter struct {
 	clientset *kubernetes.Clientset
 }
 
-func (a k8sAdapter) getSecret(name, namespace string) (*corev1.Secret, error) {
-	return a.clientset.CoreV1().Secrets(namespace).Get(context.Background(), name, metav1.GetOptions{})
+func (a k8sAdapter) getSecret(id identifier) (*secret, error) {
+	return a.clientset.CoreV1().Secrets(id.namespace).Get(context.Background(), id.name, metav1.GetOptions{})
 }
 
-func (a k8sAdapter) setSecret(secret *corev1.Secret, update bool) (err error) {
+func (a k8sAdapter) setSecret(secret *secret, update bool) (err error) {
 	secretI := a.clientset.CoreV1().Secrets(secret.Namespace)
 	if update {
 		_, err = secretI.Update(context.Background(), secret, metav1.UpdateOptions{})

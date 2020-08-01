@@ -12,3 +12,5 @@ tlser -cacert /cert/tls.crt -cakey /cert/tls.key -name app-tls -subject example.
 ```
 
 When run, `tlser` will check whether a secret exists. If it exists, is not expired or about to expire, and its properties already match the parameters, it won't be regenerated. Otherwise it generates a new certificate and updates or creates the appropriate secret.
+
+`tlser` can also be run continuously to monitor a cert and update it when necessary by passing the `-interval` flag, such as `-interval 6h`.
