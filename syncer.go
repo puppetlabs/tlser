@@ -15,17 +15,22 @@ type syncer struct {
 	subject   string
 	ip, dns   []string
 	daysValid int
-	signer    certificate
+	getSigner func() (certificate, error)
 }
 
 func (s syncer) sync() error {
+	signer, err := s.getSigner()
+	if err != nil {
+		return fmt.Errorf("unable to get signing certificate: %w", err)
+	}
+
 	previous, err := getTLSFromSecret(s.secrets, s.id)
 	if err != nil && !k8errors.IsNotFound(err) {
 		return fmt.Errorf("unable to retrieve secret %v: %w", s.id, err)
 	}
 
 	// Check whether it needs to be updated.
-	if previous.cert != nil && previous.isValid(s.signer) && previous.inSync(s.subject, s.ip, s.dns) {
+	if previous.cert != nil && previous.isValid(signer) && previous.inSync(s.subject, s.ip, s.dns) {
 		log.Print("Previous cert matches parameters, no update performed.")
 		return nil
 	}
@@ -44,7 +49,7 @@ func (s syncer) sync() error {
 		s.dns,
 		s.daysValid,
 		rsaKey,
-		s.signer,
+		signer,
 	)
 	if err != nil {
 		return fmt.Errorf("unable to generate certificate: %w", err)

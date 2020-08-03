@@ -57,13 +57,13 @@ func main() {
 		dnsStrings = strings.Split(*dns, ",")
 	}
 
-	signer, err := readCa(*cacrt, *cakey)
-	if err != nil {
-		log.Fatalf("Failed to read CA files: %v", err)
-	}
-
 	if len(*k8sName) == 0 {
 		log.Print("No secret name provided, generating cert on stdout")
+
+		signer, err := readCa(*cacrt, *cakey)
+		if err != nil {
+			log.Fatalf("Failed to read CA files: %v", err)
+		}
 
 		rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
 		if err != nil {
@@ -104,7 +104,7 @@ func main() {
 		ip:        ipStrings,
 		dns:       dnsStrings,
 		daysValid: *expire,
-		signer:    signer,
+		getSigner: func() (certificate, error) { return readCa(*cacrt, *cakey) },
 	}
 
 	if syncInterval == time.Duration(0) {

@@ -31,7 +31,7 @@ func TestSync(t *testing.T) {
 		ip:        []string{ip1, ip2},
 		dns:       []string{dns1, dns2},
 		daysValid: 365,
-		signer:    signer,
+		getSigner: func() (certificate, error) { return signer, nil },
 	}
 
 	var m1, m2, m3, m4, m5 secretMock
