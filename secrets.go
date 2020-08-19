@@ -25,12 +25,7 @@ type secrets interface {
 	setSecret(secret *secret, update bool) error
 }
 
-func getTLSFromSecret(c secrets, id identifier) (certificate, error) {
-	secret, err := c.getSecret(id)
-	if err != nil {
-		return certificate{}, err
-	}
-
+func getTLSFromSecret(secret *secret, id identifier) (certificate, error) {
 	if secret.Type != tlsSecretType {
 		return certificate{}, fmt.Errorf("secret %v must have type %v, not %v", id, tlsSecretType, secret.Type)
 	}

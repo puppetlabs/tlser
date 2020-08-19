@@ -1,26 +1,10 @@
 package main
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
-
-type secretMock struct {
-	mock.Mock
-}
-
-func (m *secretMock) getSecret(id identifier) (*secret, error) {
-	args := m.Called(id)
-	return args.Get(0).(*secret), args.Error(1)
-}
-
-func (m *secretMock) setSecret(secret *secret, update bool) error {
-	args := m.Called(secret, update)
-	return args.Error(0)
-}
 
 var (
 	testCert = `-----BEGIN CERTIFICATE-----
@@ -73,32 +57,23 @@ Sucz81ym6QREo7DZ4lDXuz5PhPW4KLeoWRw8syyraVQ/o6RsbHQ1
 func TestGetTLSFromSecret(t *testing.T) {
 	req := assert.New(t)
 	id := identifier{name: "foo", namespace: "default"}
-	var m1, m2 secretMock
-
-	m1.On("getSecret", id).Return((*secret)(nil), errors.New("failed"))
-	_, err := getTLSFromSecret(&m1, id)
-	req.Error(err)
 
 	var secret secret
-	m2.On("getSecret", id).Return(&secret, nil)
-	_, err = getTLSFromSecret(&m2, id)
+	_, err := getTLSFromSecret(&secret, id)
 	req.Error(err)
 
 	secret.Type = tlsSecretType
-	_, err = getTLSFromSecret(&m2, id)
+	_, err = getTLSFromSecret(&secret, id)
 	req.Error(err)
 
 	secret.Data = make(map[string][]byte)
 	secret.Data["tls.crt"] = []byte(testCert)
-	_, err = getTLSFromSecret(&m2, id)
+	_, err = getTLSFromSecret(&secret, id)
 	req.Error(err)
 
 	secret.Data["tls.key"] = []byte(testKey)
-	cert, err := getTLSFromSecret(&m2, id)
+	cert, err := getTLSFromSecret(&secret, id)
 	req.NoError(err)
 	req.NotNil(cert.cert)
 	req.NotNil(cert.key)
-
-	m1.AssertExpectations(t)
-	m2.AssertExpectations(t)
 }
