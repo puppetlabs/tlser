@@ -29,10 +29,12 @@ var (
 
 	k8sName  = flag.String("name", "", "Name of the Kubernetes secret to update")
 	k8sNs    = flag.String("namespace", "default", "Namespace of the Kubernetes secret to update")
+	label    = labels{}
 	interval = flag.String("interval", "", "Interval to check if cert is insync (ex: 1h, 30m)")
 )
 
 func main() {
+	flag.Var(&label, "label", "Specify a label as key=value to put on the generated secret; can appear repeatedly for multiple labels")
 	log.SetFlags(0)
 	flag.Parse()
 
@@ -104,6 +106,7 @@ func main() {
 		ip:        ipStrings,
 		dns:       dnsStrings,
 		daysValid: *expire,
+		labels:    label,
 		getSigner: func() (certificate, error) { return readCa(*cacrt, *cakey) },
 	}
 

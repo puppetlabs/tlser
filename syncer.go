@@ -15,6 +15,7 @@ type syncer struct {
 	subject   string
 	ip, dns   []string
 	daysValid int
+	labels    labels
 	getSigner func() (certificate, error)
 }
 
@@ -24,14 +25,31 @@ func (s syncer) sync() error {
 		return fmt.Errorf("unable to get signing certificate: %w", err)
 	}
 
-	previous, err := getTLSFromSecret(s.secrets, s.id)
+	priorSecret, err := s.secrets.getSecret(s.id)
 	if err != nil && !k8errors.IsNotFound(err) {
 		return fmt.Errorf("unable to retrieve secret %v: %w", s.id, err)
 	}
 
+	var previous certificate
+	if priorSecret != nil {
+		if previous, err = getTLSFromSecret(priorSecret, s.id); err != nil {
+			return err
+		}
+	}
+
 	// Check whether it needs to be updated.
-	if previous.cert != nil && previous.isValid(signer) && previous.inSync(s.subject, s.ip, s.dns) {
-		log.Print("Previous cert matches parameters, no update performed.")
+	if priorSecret != nil && previous.isValid(signer) && previous.inSync(s.subject, s.ip, s.dns) {
+		if s.labels.Equals(priorSecret.Labels) {
+			log.Print("Previous secret matches parameters, no update performed.")
+			return nil
+		}
+
+		log.Printf("Labels out-of-sync: %+v, %+v", priorSecret.Labels, s.labels)
+		log.Printf("Updating labels on secret %v", s.id)
+		priorSecret.Labels = s.labels
+		if err := s.secrets.setSecret(priorSecret, true); err != nil {
+			return fmt.Errorf("unable to update secret %v: %w", s.id, err)
+		}
 		return nil
 	}
 
@@ -62,6 +80,7 @@ func (s syncer) sync() error {
 	secret.Namespace = s.id.namespace
 	secret.Data = map[string][]byte{"tls.crt": []byte(cert), "tls.key": []byte(key)}
 	secret.Type = tlsSecretType
+	secret.Labels = s.labels
 	if err := s.secrets.setSecret(&secret, previous.cert != nil); err != nil {
 		return fmt.Errorf("unable to update secret %v: %w", s.id, err)
 	}
