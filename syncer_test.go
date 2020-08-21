@@ -58,7 +58,7 @@ func TestSync(t *testing.T) {
 
 	// Creates the secret if NotFound
 	notFound := k8errors.NewNotFound(schema.GroupResource{Resource: "Secret"}, sync.id.name)
-	m2.On("getSecret", sync.id).Return((*secret)(nil), notFound)
+	m2.On("getSecret", sync.id).Return(&secret{}, notFound)
 	m2.On("setSecret", mock.AnythingOfType("*v1.Secret"), false).Return(nil)
 	sync.secrets = &m2
 	req.NoError(sync.sync())

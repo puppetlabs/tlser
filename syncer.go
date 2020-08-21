@@ -26,8 +26,12 @@ func (s syncer) sync() error {
 	}
 
 	priorSecret, err := s.secrets.getSecret(s.id)
-	if err != nil && !k8errors.IsNotFound(err) {
-		return fmt.Errorf("unable to retrieve secret %v: %w", s.id, err)
+	if err != nil {
+		if !k8errors.IsNotFound(err) {
+			return fmt.Errorf("unable to retrieve secret %v: %w", s.id, err)
+		}
+		// Ensure priorSecret is nil so we can check it later. NotFound doesn't guarantee it's nil.
+		priorSecret = nil
 	}
 
 	var previous certificate
