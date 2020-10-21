@@ -28,10 +28,12 @@ var (
 	ip      = flag.String("ip", "", "Comma-separated list of valid IP addresses")
 
 	k8sName  = flag.String("name", "", "Name of the Kubernetes secret to update")
-	k8sNs    = flag.String("namespace", "default", "Namespace of the Kubernetes secret to update")
+	k8sNs    = flag.String("namespace", "", "Namespace of the Kubernetes secret to update")
 	label    = labels{}
 	interval = flag.String("interval", "", "Interval to check if cert is insync (ex: 1h, 30m)")
 )
+
+const namespaceFile = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 
 func main() {
 	flag.Var(&label, "label", "Specify a label as key=value to put on the generated secret; can appear repeatedly for multiple labels")
@@ -99,9 +101,22 @@ func main() {
 		log.Fatalf("Unable to initialize Kubernetes client: %v", err)
 	}
 
+	namespace := *k8sNs
+	if namespace == "" {
+		if bytes, err := ioutil.ReadFile(namespaceFile); err != nil {
+			log.Printf("Unable to read %s, using namespace 'default'", namespaceFile)
+		} else {
+			namespace = string(bytes)
+		}
+	}
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	log.Printf("Syncing certificate for %s to secret %s in namespace %s", *subject, *k8sName, namespace)
 	sync := syncer{
 		secrets:   k8sAdapter{clientset: clientset},
-		id:        identifier{name: *k8sName, namespace: *k8sNs},
+		id:        identifier{name: *k8sName, namespace: namespace},
 		subject:   *subject,
 		ip:        ipStrings,
 		dns:       dnsStrings,
