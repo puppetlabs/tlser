@@ -18,6 +18,16 @@ jobs:
       with:
         args: run -v --deadline 3m
         golangci_lint_version: 1.29.0
+  gosec:
+    name: Scan with gosec
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v2
+    - name: Run Gosec Security Scanner
+      uses: securego/gosec@v2.5.0
+      with:
+        args: ./...
   test:
     name: Test Go Stable
     runs-on: ubuntu-latest
