@@ -142,6 +142,7 @@ func main() {
 }
 
 func readPem(file string) ([]byte, error) {
+	/* #nosec */
 	bytes, err := ioutil.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read %v: %w", cacrt, err)

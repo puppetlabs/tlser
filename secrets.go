@@ -8,6 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+/* #nosec */
 const tlsSecretType = "kubernetes.io/tls"
 
 type secret = corev1.Secret
