@@ -133,6 +133,8 @@ func main() {
 	}
 
 	log.Printf("Monitoring every %v", syncInterval)
+	// Running continously, so add timestamps to log output.
+	log.SetFlags(log.LstdFlags)
 	for {
 		if err := sync.sync(); err != nil {
 			log.Fatalf("Unable to sync certs: %v", err)
