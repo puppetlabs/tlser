@@ -1,4 +1,6 @@
 # tlser
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fpuppetlabs%2Ftlser.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fpuppetlabs%2Ftlser?ref=badge_shield)
+
 
 A tiny utility for ensuring TLS certificates in Kubernetes are up-to-date.
 
@@ -16,3 +18,7 @@ When run, `tlser` will check whether a secret exists. If it exists, is not expir
 If run in a Kubernetes pod, `tlser` will use the namespace that pod runs in. Otherwise it will default to `default`. You can override the namespace with `-namespace`.
 
 `tlser` can also be run continuously to monitor a cert and update it when necessary by passing the `-interval` flag, such as `-interval 6h`.
+
+
+## License
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fpuppetlabs%2Ftlser.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fpuppetlabs%2Ftlser?ref=badge_large)
