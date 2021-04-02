@@ -51,4 +51,8 @@ func TestLabelsEqual(t *testing.T) {
 
 	req.NoError(l.Set("key=value"))
 	req.True(l.Equals(other))
+
+	req.NoError(l.Set("key2=value2"))
+	req.NoError(l.Set("key1=value1"))
+	req.True(l.Equals(map[string]string{"key": "value", "key1": "value1", "key2": "value2"}))
 }
