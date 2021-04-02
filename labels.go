@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -16,6 +17,7 @@ func (f *labels) String() string {
 	for k, v := range *f {
 		strArray = append(strArray, k+"="+v)
 	}
+	sort.Strings(strArray)
 	return strings.Join(strArray, ",")
 }
 
