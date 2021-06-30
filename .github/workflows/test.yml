@@ -14,10 +14,10 @@ jobs:
     - name: Check out code
       uses: actions/checkout@v2
     - name: Lint
-      uses: actions-contrib/golangci-lint@v1
+      uses: golangci/golangci-lint-action@v2
       with:
-        args: run -v --deadline 3m
-        golangci_lint_version: 1.29.0
+        args: -v --deadline 3m
+        version: v1.29
   gosec:
     name: Scan with gosec
     runs-on: ubuntu-latest
