@@ -9,3 +9,6 @@ require (
 	k8s.io/client-go v0.21.2
 	sigs.k8s.io/controller-runtime v0.9.2
 )
+
+// Fix CVE; pulled in by controller-runtime.
+replace github.com/miekg/dns => github.com/miekg/dns v1.1.25
