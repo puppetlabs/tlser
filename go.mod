@@ -3,9 +3,12 @@ module github.com/puppetlabs/tlser
 go 1.14
 
 require (
-	github.com/stretchr/testify v1.6.1
-	k8s.io/api v0.18.6
-	k8s.io/apimachinery v0.18.6
-	k8s.io/client-go v0.18.6
-	sigs.k8s.io/controller-runtime v0.6.1
+	github.com/stretchr/testify v1.7.0
+	k8s.io/api v0.21.2
+	k8s.io/apimachinery v0.21.2
+	k8s.io/client-go v0.21.2
+	sigs.k8s.io/controller-runtime v0.9.2
 )
+
+// Fix CVE; pulled in by controller-runtime.
+replace github.com/miekg/dns => github.com/miekg/dns v1.1.25
