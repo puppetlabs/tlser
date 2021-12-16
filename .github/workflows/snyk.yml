@@ -1,0 +1,27 @@
+name: Snyk
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Snyk monitor
+        if: github.event_name == 'push'
+        uses: snyk/actions/golang@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_PLATSVCS_KEY }}
+        with:
+          command: monitor
+          args: --org=puppet-platform-services
+      - name: Snyk test
+        if: github.event_name == 'pull_request'
+        uses: snyk/actions/golang@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_PLATSVCS_KEY }}
+        with:
+          command: test
+          args: --org=puppet-platform-services
